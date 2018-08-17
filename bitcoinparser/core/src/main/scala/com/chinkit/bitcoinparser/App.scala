@@ -1,9 +1,14 @@
 package com.chinkit.bitcoinparser
 
+import java.io.StringWriter
+
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.spark.input.PortableDataStream
 import org.apache.spark.sql.SparkSession
 import org.bitcoinj.core.{Block, Context, Utils}
 import org.bitcoinj.params.MainNetParams
+import org.json4s.jackson.Json
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 object App {
 
@@ -15,23 +20,61 @@ object App {
             .getOrCreate()
 
         val files = session.sparkContext.binaryFiles("/Users/chinkit/Downloads/blk*.dat")
-        var blocks = files.flatMap(f => MyFunctions.func2(f))
+        var blocks = files.flatMap(f => BitcoinBlockParser.Parse(f))
+        var blocksAsString = blocks.map(f => BitcoinBlockParser.Convert(f))
 
 
-        println(blocks.count())
+        println(blocksAsString.first())
+        println(blocksAsString.count())
 
         session.close()
 
     }
 
-    object MyFunctions {
-        var params = MainNetParams.get;
-        def func2(f: (String, PortableDataStream)): List[Block] = {
+    class Node{
+        var id = ""
+        var label = ""
+        var graph = new Array[String](0)
+        var props: Map[String, String] = Map()
+    }
 
+    class Edge{
+        var id = ""
+        var label = ""
+        var src = ""
+        var dst = ""
+        var graph = new Array[String](0)
+        val props = scala.collection.mutable.Map[String, String]()
+    }
+
+    object BitcoinBlockParser {
+        var params = MainNetParams.get;
+        var mapper = new ObjectMapper()
+        mapper.registerModule(DefaultScalaModule)
+
+        def Convert(f: Block): String = {
+            var node = new Node()
+            node.id = f.getHashAsString
+            node.label = "block"
+            node.props += ("PreviousBlockHash" -> f.getPrevBlockHash.toString)
+            node.props += ("Nonce" -> f.getNonce.toString)
+            node.props += ("Difficulty" -> f.getDifficultyTarget.toString)
+            node.props += ("Version" -> f.getVersion.toString)
+            node.props += ("MerkleRoot" -> f.getMerkleRoot.toString)
+            node.props += ("Time" -> f.getTime.toString)
+
+            return mapper.writeValueAsString(node)
+        }
+
+
+        def Parse(f: (String, PortableDataStream)): List[Block] = {
+
+            //This line is required to init the context.
             val c = Context.getOrCreate(params)
+
             var blocks = List[Block]()
 
-            var stream = f._2.open()
+            val stream = f._2.open()
             val fileBytes = new Array[Byte](stream.available())
             stream.readFully(fileBytes)
             var byteCursor = 0
