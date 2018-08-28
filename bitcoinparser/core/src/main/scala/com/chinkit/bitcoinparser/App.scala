@@ -9,23 +9,27 @@ import org.bitcoinj.core.{Block, Context, Utils}
 import org.bitcoinj.params.MainNetParams
 import org.json4s.jackson.Json
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import org.apache.spark.SparkConf
 
 object App {
 
     def main(args: Array[String]): Unit = {
 
+        val conf = new SparkConf
+        conf.setIfMissing("spark.master", "local[*]")
+        conf.setIfMissing("spark.app.name", getClass.getSimpleName)
+
         val session = SparkSession.builder()
-            .appName(getClass.getSimpleName)
-            .master("local[*]")
+            .config(conf)
             .getOrCreate()
 
-        val files = session.sparkContext.binaryFiles("/Users/chinkit/Downloads/blk*.dat")
+        val files = session.sparkContext.binaryFiles(args(0))
+        println("No of files is " + files.count())
         var blocks = files.flatMap(f => BitcoinBlockParser.Parse(f))
+        println("No of blocks is " + blocks.count())
         var blocksAsString = blocks.map(f => BitcoinBlockParser.Convert(f))
 
-
-        println(blocksAsString.first())
-        println(blocksAsString.count())
+        blocksAsString.saveAsTextFile(args(1))
 
         session.close()
 
@@ -74,9 +78,10 @@ object App {
 
             var blocks = List[Block]()
 
-            val stream = f._2.open()
-            val fileBytes = new Array[Byte](stream.available())
-            stream.readFully(fileBytes)
+            val fileBytes = f._2.toArray()
+            println("Size of the available block : " + fileBytes.length)
+
+            //stream.readFully(fileBytes)
             var byteCursor = 0
             var blockCount = 0
 
