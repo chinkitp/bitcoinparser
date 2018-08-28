@@ -78,28 +78,32 @@ object App {
 
             var blocks = List[Block]()
 
-            val fileBytes = f._2.toArray()
-            println("Size of the available block : " + fileBytes.length)
+            try
+            {
+                val fileBytes = f._2.toArray()
+                println("Size of the available block : " + fileBytes.length)
 
-            //stream.readFully(fileBytes)
-            var byteCursor = 0
-            var blockCount = 0
+                //stream.readFully(fileBytes)
+                var byteCursor = 0
+                var blockCount = 0
 
-            while (IsMagic(fileBytes, byteCursor)) {
+                while (IsMagic(fileBytes, byteCursor)) {
 
-                blockCount = blockCount + 1;
+                    blockCount = blockCount + 1;
 
-                var blockSizeBytes = new Array[Byte](4)
-                System.arraycopy(fileBytes,byteCursor + 4,blockSizeBytes,0,4)
-                val blockSize = Utils.readUint32BE(Utils.reverseBytes(blockSizeBytes), 0)
-                var blockBytes = new Array[Byte](blockSize.toInt)
-                System.arraycopy(fileBytes,byteCursor + 8,blockBytes,0, blockSize.toInt);
-                var block = params.getDefaultSerializer.makeBlock(blockBytes);
-                byteCursor = byteCursor + 8 + blockSize.toInt;
-                blocks = blocks.::(block)
+                    var blockSizeBytes = new Array[Byte](4)
+                    System.arraycopy(fileBytes,byteCursor + 4,blockSizeBytes,0,4)
+                    val blockSize = Utils.readUint32BE(Utils.reverseBytes(blockSizeBytes), 0)
+                    var blockBytes = new Array[Byte](blockSize.toInt)
+                    System.arraycopy(fileBytes,byteCursor + 8,blockBytes,0, blockSize.toInt);
+                    var block = params.getDefaultSerializer.makeBlock(blockBytes);
+                    byteCursor = byteCursor + 8 + blockSize.toInt;
+                    blocks = blocks.::(block)
+                }
             }
-
-
+            catch {
+                case e: Exception => println("Error parsing block :" + f._1 + e.getMessage)
+            }
 
             return  blocks
         }
