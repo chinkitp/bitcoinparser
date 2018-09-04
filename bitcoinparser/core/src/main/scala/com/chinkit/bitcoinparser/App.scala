@@ -10,6 +10,10 @@ import org.bitcoinj.params.MainNetParams
 import org.json4s.jackson.Json
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.SparkConf
+import org.apache.spark.rdd.RDD
+
+import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 object App {
 
@@ -25,31 +29,50 @@ object App {
 
         val files = session.sparkContext.binaryFiles(args(0))
         println("No of files is " + files.count())
-        var blocks = files.flatMap(f => BitcoinBlockParser.Parse(f))
-        println("No of blocks is " + blocks.count())
-        var blocksAsString = blocks.map(f => BitcoinBlockParser.Convert(f))
+        var blocks: RDD[Try[Block]] = files.flatMap(f => BitcoinBlockParser.Parse(f))
 
+        val successBlocks: RDD[Block] = blocks.flatMap {
+          case Success(x) => Some(x)
+          case Failure(_) => None
+        }
+
+        val failureBlocks: RDD[BadBlockException] = blocks.flatMap {
+           case Success(x) => None
+           case Failure(t: BadBlockException) => Some(t)
+       }
+
+//        blocks.filter {
+//          case Success(x) => true
+//          case Failure(_) => false
+//        } map (x => x.asInstanceOf[Success].value)
+
+
+        //println("No of blocks is " + successBlocks.count())
+        var blocksAsString = successBlocks.map(f => BitcoinBlockParser.Convert(f))
+
+        //blocksAsString.collect().foreach(s=> printf(s))
         blocksAsString.saveAsTextFile(args(1))
+        failureBlocks.map(b => (b.filename,b.message)).saveAsTextFile(args(2))
 
         session.close()
 
     }
 
-    class Node{
-        var id = ""
-        var label = ""
-        var graph = new Array[String](0)
-        var props: Map[String, String] = Map()
-    }
+    class Node(
+      val id: String,
+      val label: String,
+      val graph: Array[String],
+      val props: Map[String, AnyRef]
+    )
 
-    class Edge{
+/*    class Edge{
         var id = ""
         var label = ""
         var src = ""
         var dst = ""
         var graph = new Array[String](0)
         val props = scala.collection.mutable.Map[String, String]()
-    }
+    }*/
 
     object BitcoinBlockParser {
         var params = MainNetParams.get;
@@ -57,31 +80,39 @@ object App {
         mapper.registerModule(DefaultScalaModule)
 
         def Convert(f: Block): String = {
-            var node = new Node()
-            node.id = f.getHashAsString
-            node.label = "block"
-            node.props += ("PreviousBlockHash" -> f.getPrevBlockHash.toString)
-            node.props += ("Nonce" -> f.getNonce.toString)
-            node.props += ("Difficulty" -> f.getDifficultyTarget.toString)
-            node.props += ("Version" -> f.getVersion.toString)
-            node.props += ("MerkleRoot" -> f.getMerkleRoot.toString)
-            node.props += ("Time" -> f.getTime.toString)
+            val node = new Node(
+                f.getHashAsString,
+                "block",
+                Array.empty,
+                Map(
+                    "PreviousBlockHash" -> f.getPrevBlockHash.toString,
+                    "Nonce" -> f.getNonce.toString,
+                    "Difficulty" -> f.getDifficultyTarget.toString,
+                    "Version" -> f.getVersion.toString,
+                    "MerkleRoot" -> f.getMerkleRoot.toString,
+                    "Time" -> f.getTime.toString
+                )
+            )
 
             return mapper.writeValueAsString(node)
         }
 
 
-        def Parse(f: (String, PortableDataStream)): List[Block] = {
+        def Parse(f: (String, PortableDataStream)): Seq[Try[Block]] = {
 
             //This line is required to init the context.
             val c = Context.getOrCreate(params)
 
-            var blocks = List[Block]()
+            var blocks = Seq.newBuilder[Try[Block]]
 
             try
             {
+                if(f._1.endsWith("blk00003.dat")){
+                    throw new Exception("I don't like this file")
+                }
+
                 val fileBytes = f._2.toArray()
-                println("Size of the available block : " + fileBytes.length)
+                //println("Size of the available block : " + fileBytes.length)
 
                 //stream.readFully(fileBytes)
                 var byteCursor = 0
@@ -98,14 +129,15 @@ object App {
                     System.arraycopy(fileBytes,byteCursor + 8,blockBytes,0, blockSize.toInt);
                     var block = params.getDefaultSerializer.makeBlock(blockBytes);
                     byteCursor = byteCursor + 8 + blockSize.toInt;
-                    blocks = blocks.::(block)
+                    blocks += Success(block)
                 }
             }
             catch {
-                case e: Exception => println("Error parsing block :" + f._1 + e.getMessage)
+                case e: Exception =>
+                    blocks += Failure(new BadBlockException(f._1,e.getMessage))
             }
 
-            return  blocks
+            return  blocks.result()
         }
 
         private def IsMagic(bytes: Array[Byte], startSeq: Int): Boolean= {
@@ -119,8 +151,8 @@ object App {
             false
         }
 
-
-
     }
 
 }
+
+case class BadBlockException(filename: String, message: String) extends Exception(message)
