@@ -1,16 +1,19 @@
 package com.chinkit.bitcoinparser
 
 import java.io.StringWriter
+import java.util
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.spark.input.PortableDataStream
 import org.apache.spark.sql.SparkSession
-import org.bitcoinj.core.{Block, Context, Utils}
+import org.bitcoinj.core.{Block, Context, Transaction, Utils}
 import org.bitcoinj.params.MainNetParams
 import org.json4s.jackson.Json
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.expressions.Concat
+import org.bitcoinj.wallet.Protos.TransactionInput
 
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
@@ -27,32 +30,13 @@ object App {
             .config(conf)
             .getOrCreate()
 
-        val files = session.sparkContext.binaryFiles(args(0))
-        println("No of files is " + files.count())
-        var blocks: RDD[Try[Block]] = files.flatMap(f => BitcoinBlockParser.Parse(f))
+        val files: RDD[(String, PortableDataStream)] = session.sparkContext.binaryFiles(args(0))
 
-        val successBlocks: RDD[Block] = blocks.flatMap {
-          case Success(x) => Some(x)
-          case Failure(_) => None
-        }
+        var parsedFiles: RDD[(String, Seq[String])] = files.map(f => BitcoinBlockParser.FileParse(f))
 
-        val failureBlocks: RDD[BadBlockException] = blocks.flatMap {
-           case Success(x) => None
-           case Failure(t: BadBlockException) => Some(t)
-       }
+        parsedFiles.flatMap(f => f._2)
+            .saveAsTextFile(args(2))
 
-//        blocks.filter {
-//          case Success(x) => true
-//          case Failure(_) => false
-//        } map (x => x.asInstanceOf[Success].value)
-
-
-        //println("No of blocks is " + successBlocks.count())
-        var blocksAsString = successBlocks.map(f => BitcoinBlockParser.Convert(f))
-
-        //blocksAsString.collect().foreach(s=> printf(s))
-        blocksAsString.saveAsTextFile(args(1))
-        failureBlocks.map(b => (b.filename,b.message)).saveAsTextFile(args(2))
 
         session.close()
 
@@ -79,22 +63,70 @@ object App {
         var mapper = new ObjectMapper()
         mapper.registerModule(DefaultScalaModule)
 
-        def Convert(f: Block): String = {
-            val node = new Node(
-                f.getHashAsString,
-                "block",
-                Array.empty,
-                Map(
-                    "PreviousBlockHash" -> f.getPrevBlockHash.toString,
-                    "Nonce" -> f.getNonce.toString,
-                    "Difficulty" -> f.getDifficultyTarget.toString,
-                    "Version" -> f.getVersion.toString,
-                    "MerkleRoot" -> f.getMerkleRoot.toString,
-                    "Time" -> f.getTime.toString
-                )
-            )
+        def FileParse(f: (String, PortableDataStream)): (String, Seq[String]) = {
 
-            return mapper.writeValueAsString(node)
+            val blocks: Seq[Try[Block]] = BitcoinBlockParser.Parse(f._1, f._2)
+
+            val successBlocks: Seq[String] = blocks.filter(b => b.isSuccess)
+                .map(b => Convert(b.get))
+                .flatten(b => b)
+
+
+            val failedBlocks: Seq[String] = blocks.filter(b => b.isFailure)
+                .map(b => {
+                    var exp = b.asInstanceOf[Failure[BadBlockException]].exception
+                            .asInstanceOf[BadBlockException]
+                    Seq[String](exp.filename,exp.message)
+                })
+                .flatten(b => b)
+
+            (f._1,Seq concat(successBlocks, failedBlocks,Array("")))
+
+        }
+
+        def Convert(f: Block): Seq[String] = {
+
+            try{
+                val block = new Node(
+                    f.getHashAsString,
+                    "block",
+                    Array.empty,
+                    Map(
+                        "PreviousBlockHash" -> f.getPrevBlockHash.toString,
+                        "Nonce" -> f.getNonce.toString,
+                        "Difficulty" -> f.getDifficultyTarget.toString,
+                        "Version" -> f.getVersion.toString,
+                        "MerkleRoot" -> f.getMerkleRoot.toString,
+                        "Time" -> f.getTime.toString
+                    )
+                )
+
+                var transactions = new Array[App.Node](0)
+                if(f.getTransactions != null && f.getTransactions.size() > 0){
+                    transactions = f.getTransactions.toArray(new Array[Transaction](f.getTransactions.size()))
+                        .map(t => new Node(
+                            t.getHashAsString,
+                            label = "transaction",
+                            Array.empty,
+                            Map(
+                                "isCoinBase" -> t.isCoinBase.toString,
+                                "isTimeLocked" -> t.isTimeLocked.toString,
+                                "memo" -> t.getMemo,
+                                "version" -> t.getVersion.toString
+                            )
+                        ))
+                }
+
+                return (Seq concat(transactions, Array(block)))
+                    .map(b => mapper.writeValueAsString(b))
+
+            }
+            catch{
+                case e: Exception =>
+                    println(e.getMessage)
+            }
+
+            Array("")
         }
 
 
@@ -107,10 +139,6 @@ object App {
 
             try
             {
-                if(f._1.endsWith("blk00003.dat")){
-                    throw new Exception("I don't like this file")
-                }
-
                 val fileBytes = f._2.toArray()
                 //println("Size of the available block : " + fileBytes.length)
 
