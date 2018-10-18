@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bitcoin-parser-master
+spec:
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        app: bitcoin-parser
+        role: master
+        tier: backend
+    spec:
+      containers:
+      - name: master
+        image: gcr.io/bitcoin-graph-212514/bitcoin-master:v13
+        imagePullPolicy: Always
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/etc/shared/bitcoin-graph-108593a03cbe.json"        
+        volumeMounts:
+        - name: shared
+          mountPath: "/etc/shared"
+      restartPolicy: OnFailure          
+      volumes:
+      - name: shared
+        secret:
+          secretName: storage-key-file
+          defaultMode: 256

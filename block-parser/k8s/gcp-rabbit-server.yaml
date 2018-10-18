@@ -1,0 +1,18 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: bitcoin-parser-work-queue
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: bitcoin-parser
+        role: work-queue
+        tier: backend
+    spec:
+      containers:
+      - name: rabbit-mq-server
+        image: rabbitmq:3
+        ports:
+        - containerPort: 5672

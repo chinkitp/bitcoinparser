@@ -10,6 +10,8 @@ import org.bitcoinj.core.{Block, Context, Transaction, Utils}
 import org.bitcoinj.params.MainNetParams
 import org.json4s.jackson.Json
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import org.apache.commons.codec.binary.Hex
+import org.apache.hadoop.io.compress.GzipCodec
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions.Concat
@@ -34,6 +36,25 @@ object App {
             .config(conf)
             .getOrCreate()
 
+        var blocksAsArray: RDD[(String, Try[Seq[Array[Byte]]])] = session.sparkContext.binaryFiles(INPUT_DIR)
+                .map(f => (f._1, Try(BitcoinStore.splitIntoBlocks(f._2.toArray()))))
+
+        blocksAsArray.filter(f => f._2.isSuccess)
+            .map(f =>  f._2.get)
+            .flatMap(f => f)
+            .map(f => Hex.encodeHexString(f))
+            //.coalesce(50)
+            .saveAsTextFile(OUTPUT_DIR,classOf[GzipCodec])
+
+        blocksAsArray.filter(f => f._2.isFailure)
+            .map(f =>  (f._1, f._2))
+            .coalesce(1)
+            .saveAsTextFile(ERROR_DIR)
+
+        //        .map(a => Hex.encodeHexString(a))
+        //        .saveAsTextFile(OUTPUT_DIR)
+
+/*
         var blockStoreFileWithEpgmElements = session.sparkContext.binaryFiles(INPUT_DIR)
                 .map(f => (f._1, Try(BitcoinStore.parse(f._2))))
 
@@ -46,7 +67,7 @@ object App {
         blockStoreFileWithEpgmElements.filter(f => f._2.isFailure)
                 .map(f =>  (f._1,f._2))
                 .saveAsTextFile(ERROR_DIR)
-
+*/
         session.close()
 
     }
@@ -121,7 +142,7 @@ object App {
             )
         }
 
-        private def splitIntoBlocks(t: Array[Byte]) : Seq[Array[Byte]] = {
+        def splitIntoBlocks(t: Array[Byte]) : Seq[Array[Byte]] = {
             var blocksAsBytes = Seq.newBuilder[Array[Byte]]
             var byteCursor = 0
             var blockCount = 0

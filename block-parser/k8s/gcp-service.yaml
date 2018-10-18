@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bitcoin-parser-work-queue-service
+  labels:
+    app: bitcoin-parser
+spec:
+  ports:
+    - port: 5672
+  selector:
+    app: bitcoin-parser
+    role: work-queue

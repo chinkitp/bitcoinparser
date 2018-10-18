@@ -1,0 +1,28 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: bitcoin-parser-worker
+spec:
+  replicas: 6
+  template:
+    metadata:
+      labels:
+        app: bitcoin-parser
+        role: worker
+        tier: middle
+    spec:
+      containers:
+      - name: worker
+        image: gcr.io/bitcoin-graph-212514/bitcoin-worker:v13
+        imagePullPolicy: Always
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/etc/shared/bitcoin-graph-108593a03cbe.json"        
+        volumeMounts:
+        - name: shared
+          mountPath: "/etc/shared"       
+      volumes:
+      - name: shared
+        secret:
+          secretName: storage-key-file
+          defaultMode: 256
