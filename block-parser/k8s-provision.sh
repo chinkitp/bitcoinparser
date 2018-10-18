@@ -1,5 +1,5 @@
 export PROJECT_ID="$(gcloud config get-value project -q)"
-kubectl create secret generic storage-key-file --from-file /Users/chinkit/Downloads/bitcoin-graph-108593a03cbe.json
+kubectl create secret generic storage-key-file --from-file ./Secrets/bitcoin-graph-108593a03cbe.json
 docker build ./master/ -t "gcr.io/${PROJECT_ID}/bitcoin-master:v13" --no-cache
 docker push "gcr.io/${PROJECT_ID}/bitcoin-master:v13"
 kubectl create -f ./k8s/gcp-rabbit-server.yaml

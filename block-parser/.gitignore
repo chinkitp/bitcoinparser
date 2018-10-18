@@ -21,6 +21,7 @@ obj/
 x64/
 x86/
 bld/
+Secrets/*.json
 
 [Ll]og/
 
