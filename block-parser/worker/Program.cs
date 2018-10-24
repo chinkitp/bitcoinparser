@@ -139,7 +139,7 @@ namespace dotnet_bitcoinparser
                         var txo = txi.PrevOut.Hash.ToString() + "-" + txi.PrevOut.N;
                         var spent_id = "SPENT : " + txo;
 
-                        var unlocked = new Edge(spent_id,"SPENT",txo,spent_id,new Dictionary<string, object>{
+                        var unlocked = new Edge(spent_id,"SPENT",txo,t.GetHash().ToString(),new Dictionary<string, object>{
                             { "SignedBy",txi.ScriptSig?.GetSigner()?.ToString()},
                             {"SignedBy_Address",txi.ScriptSig?.GetSignerAddress(Network.Main)?.ToString()},
                             {"ScriptLength",txi.ScriptSig?.Length},                        
