@@ -64,8 +64,7 @@ namespace dotnet_bitcoinparser
             Console.WriteLine($"Processing file {fileName}");
 
             var blocksAsHex = GetBlocksFromGoogleFile(fileName);
-            foreach (var item in blocksAsHex)
-            {
+            Parallel.ForEach(blocksAsHex,(item)=>{
                 try
                 {
                     var block = Block.Parse(item,Network.Main);
@@ -74,13 +73,13 @@ namespace dotnet_bitcoinparser
 
                     string blockHash = block.GetHash().ToString();
                     WriteGoogleFile( $"{blockHash}.txt" ,epgmElements);
-                    Console.WriteLine($"In {fileName} successfully processed block : {blockHash}");
+                    //Console.WriteLine($"In {fileName} successfully processed block : {blockHash}");
                 }
                 catch (System.Exception ex)
                 {
                     Console.WriteLine($"In {fileName} unable to process block : {item} due to {ex.Message}");
                 }
-            }               
+            });             
         }
 
         private static IEnumerable<Epm> ToEpgmElements(Block block)
