@@ -73,7 +73,7 @@ namespace dotnet_bitcoinparser
 
                     string blockHash = block.GetHash().ToString();
                     WriteGoogleFile( $"{blockHash}.txt" ,epgmElements);
-                    //Console.WriteLine($"In {fileName} successfully processed block : {blockHash}");
+                    
                 }
                 catch (System.Exception ex)
                 {
@@ -87,7 +87,7 @@ namespace dotnet_bitcoinparser
             var emtpyProps = new Dictionary<string, object>();
             var elements = new List<Epm>();
 
-            var blockVertex = new Vertex(block.Header.ToString(),"block",new Dictionary<string, object>{
+            var blockVertex = new Vertex(block.Header.ToString(),Label.BLOCK,new Dictionary<string, object>{
                 {"PreviousBlockHash",block.Header.HashPrevBlock.ToString()},
                 {"Nonce",block.Header.Nonce},
                 {"Difficulty",block.Header.Bits},
@@ -98,7 +98,7 @@ namespace dotnet_bitcoinparser
             elements.Add(blockVertex);
 
             //previous block
-            var previous_block = new Edge(GetGuid(),"PREVIOUS",block.Header.ToString(),block.Header.HashPrevBlock.ToString(),emtpyProps);
+            var previous_block = new Edge(GetGuid(),Label.PREVIOUS,block.Header.ToString(),block.Header.HashPrevBlock.ToString(),emtpyProps);
 
 
             foreach (var t in block.Transactions)
@@ -119,11 +119,11 @@ namespace dotnet_bitcoinparser
                     txData.Add("Script",t.Inputs[0].ScriptSig?.ToHex());                  
                 }
 
-                var tx = new Vertex(t.GetHash().ToString(),"tx",txData);
+                var tx = new Vertex(t.GetHash().ToString(),Label.TRANSACTION,txData);
                 
                 //edge
                 string minded_in_id = block.Header.ToString() + "-" + block.Transactions.IndexOf(t).ToString();
-                var mined_in = new Edge(minded_in_id,"MINED_IN",t.GetHash().ToString(),block.Header.ToString(),emtpyProps);
+                var mined_in = new Edge(minded_in_id,Label.MINED_IN,t.GetHash().ToString(),block.Header.ToString(),emtpyProps);
 
                 elements.Add(tx);
                 elements.Add(mined_in);
@@ -138,7 +138,7 @@ namespace dotnet_bitcoinparser
                         var txo = txi.PrevOut.Hash.ToString() + "-" + txi.PrevOut.N;
                         var spent_id = "SPENT : " + txo;
 
-                        var unlocked = new Edge(spent_id,"SPENT",txo,t.GetHash().ToString(),new Dictionary<string, object>{
+                        var unlocked = new Edge(spent_id,Label.SPENT,txo,t.GetHash().ToString(),new Dictionary<string, object>{
                             { "SignedBy",txi.ScriptSig?.GetSigner()?.ToString()},
                             {"SignedBy_Address",txi.ScriptSig?.GetSignerAddress(Network.Main)?.ToString()},
                             {"ScriptLength",txi.ScriptSig?.Length},                        
@@ -163,27 +163,27 @@ namespace dotnet_bitcoinparser
                         }
                     );
                     elements.Add(txoVertex);
-                    elements.Add(new Edge(GetGuid(),"PRODUCED",t.GetHash().ToString(),txoId,emtpyProps));
+                    elements.Add(new Edge(GetGuid(),Label.PRODUCED,t.GetHash().ToString(),txoId,emtpyProps));
 
                     if(txo.ScriptPubKey?.FindTemplate()?.Type == TxOutType.TX_PUBKEY)
                     {
                         foreach (var desPubKey in txo.ScriptPubKey?.GetDestinationPublicKeys())
                         {
                             var addressIdFromPubKey = desPubKey.GetAddress(Network.Main).ToString();
-                            var desAddressVertex = new Vertex(addressIdFromPubKey,"address",new Dictionary<string, object>{
+                            var desAddressVertex = new Vertex(addressIdFromPubKey,Label.ADDRESS,new Dictionary<string, object>{
                                 {"Public_Key", desPubKey.ToString() }
                             });
                             elements.Add(desAddressVertex);
-                            elements.Add(new Edge(GetGuid(),"LOCKED_AT",txoId,addressIdFromPubKey,emtpyProps));
+                            elements.Add(new Edge(GetGuid(),Label.LOCKED_AT,txoId,addressIdFromPubKey,emtpyProps));
                         }
                     
                     }
                     else if(txo.ScriptPubKey?.FindTemplate()?.Type == TxOutType.TX_PUBKEYHASH) 
                     {
                         var addressId = txo.ScriptPubKey?.GetDestinationAddress(Network.Main)?.ToString();
-                        var desAddressVertex = new Vertex(addressId,"address",emtpyProps);
+                        var desAddressVertex = new Vertex(addressId,Label.ADDRESS,emtpyProps);
                         elements.Add(desAddressVertex);
-                        elements.Add(new Edge(GetGuid(),"LOCKED_AT",txoId,addressId,emtpyProps));
+                        elements.Add(new Edge(GetGuid(),Label.LOCKED_AT,txoId,addressId,emtpyProps));
                     }
           
                 }             
@@ -242,5 +242,18 @@ namespace dotnet_bitcoinparser
                 }
             }
         }
+    }
+
+    static class Label
+    {
+        public static string BLOCK = "block";
+        public static string TRANSACTION = "tx";
+        public static string TRANSACTION_OUT = "txout";
+        public static string ADDRESS = "address";
+        public static string PREVIOUS = "PREVIOUS";
+        public static string SPENT = "SPENT";
+        public static string MINED_IN = "MINED_IN";
+        public static string LOCKED_AT = "LOCKED_AT";
+        public static string PRODUCED = "PRODUCED";
     }
 }
