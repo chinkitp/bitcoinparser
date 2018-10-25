@@ -68,12 +68,19 @@ namespace dotnet_bitcoinparser
                 try
                 {
                     var block = Block.Parse(item,Network.Main);
-                    var epgmElements = ToEpgmElements(block)
-                            .Select(e => JsonConvert.SerializeObject(e));
-
                     string blockHash = block.GetHash().ToString();
-                    WriteGoogleFile( $"{blockHash}.txt" ,epgmElements);
                     
+                    var elementGroups = ToEpgmElements(block)
+                                    .GroupBy(e => e.Meta.Label)
+                                    .Select(g => {
+                                        return new {g.Key, Elements = g.Select(e => JsonConvert.SerializeObject(e))};                                      
+                                    });
+                                                                
+                    foreach (var elementGroup in elementGroups)
+                    {
+                        var label = elementGroup.Key;
+                        WriteGoogleFile(label, $"{blockHash}.txt" ,elementGroup.Elements);    
+                    }
                 }
                 catch (System.Exception ex)
                 {
@@ -198,7 +205,7 @@ namespace dotnet_bitcoinparser
              .Substring(0,22);
         }
 
-        private static void WriteGoogleFile(string fileName, IEnumerable<string> lines)
+        private static void WriteGoogleFile(string folder, string fileName, IEnumerable<string> lines)
         {
             var storage = StorageClient.Create();
             StringBuilder sb = new StringBuilder();
@@ -209,7 +216,7 @@ namespace dotnet_bitcoinparser
             var asFile = System.Text.Encoding.Default.GetBytes(sb.ToString());
             using (var memoryStream = new MemoryStream(asFile))
             {
-                storage.UploadObject("bitcoin-epgm", $"epgm/{fileName}", "application/octet-stream", memoryStream); 
+                storage.UploadObject("bitcoin-epgm", $"epgm/{folder}/{fileName}", "application/octet-stream", memoryStream); 
             }
         }
 
