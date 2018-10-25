@@ -15,6 +15,13 @@ spec:
       - name: worker
         image: gcr.io/bitcoin-graph-212514/bitcoin-worker:v13
         imagePullPolicy: Always
+        resources:
+          limits:
+            memory: "10G"
+            cpu: "1.5"
+          requests:
+            memory: "10G"
+            cpu: "1.5"      
         env:
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: "/etc/shared/bitcoin-graph-108593a03cbe.json"        

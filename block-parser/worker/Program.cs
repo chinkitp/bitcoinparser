@@ -20,6 +20,12 @@ namespace dotnet_bitcoinparser
 {
     class Program
     {
+        static JsonSerializerSettings serializationSettings = new JsonSerializerSettings()
+        {
+            Error = (s, e) => { e.ErrorContext.Handled = true; }
+            //ContractResolver = new CustomResolver()
+        };
+
         static void Main(string[] args)
         {
             InitQueueWorker();
@@ -64,16 +70,16 @@ namespace dotnet_bitcoinparser
             Console.WriteLine($"Processing file {fileName}");
 
             var blocksAsHex = GetBlocksFromGoogleFile(fileName);
-            // Dictionary<string,List<string>> data = new Dictionary<string, List<string>>(); 
-            // data.Add(Label.BLOCK,new List<string>());
-            // data.Add(Label.ADDRESS,new List<string>());
-            // data.Add(Label.TRANSACTION,new List<string>());
-            // data.Add(Label.TRANSACTION_OUT,new List<string>());
-            // data.Add(Label.SPENT,new List<string>());
-            // data.Add(Label.PRODUCED,new List<string>());
-            // data.Add(Label.PREVIOUS,new List<string>());
-            // data.Add(Label.MINED_IN,new List<string>());
-            // data.Add(Label.LOCKED_AT,new List<string>());
+            Dictionary<string,List<string>> data = new Dictionary<string, List<string>>(); 
+            data.Add(Label.BLOCK,new List<string>());
+            data.Add(Label.ADDRESS,new List<string>());
+            data.Add(Label.TRANSACTION,new List<string>());
+            data.Add(Label.TRANSACTION_OUT,new List<string>());
+            data.Add(Label.SPENT,new List<string>());
+            data.Add(Label.PRODUCED,new List<string>());
+            data.Add(Label.PREVIOUS,new List<string>());
+            data.Add(Label.MINED_IN,new List<string>());
+            data.Add(Label.LOCKED_AT,new List<string>());
 
             foreach (var item in blocksAsHex)
             {
@@ -85,19 +91,24 @@ namespace dotnet_bitcoinparser
                     var elementGroups = ToEpgmElements(block)
                                     .GroupBy(e => e.Meta.Label)
                                     .Select(g => {
-                                        return new {g.Key, Elements = g.Select(e => JsonConvert.SerializeObject(e))};                                      
+                                        return new {g.Key, Elements = g.Select(e => JsonConvert.SerializeObject(e,serializationSettings))};                                      
                                     });
                                                                 
                     foreach (var elementGroup in elementGroups)
                     {
                         var label = elementGroup.Key;
-                        WriteGoogleFile(label, $"{blockHash}.txt" , elementGroup.Elements);  
+                        data[label].AddRange(elementGroup.Elements);
+                        //WriteGoogleFile(label, $"{blockHash}.txt" , elementGroup.Elements);  
                     }
                 }
                 catch (System.Exception ex)
                 {
                     Console.WriteLine($"In {fileName} unable to process block : {item} due to {ex.Message}");
                 }               
+            }
+            foreach (var item in data)
+            {
+                WriteGoogleFile(item.Key, $"{fileName}.txt" , data[item.Key]);
             }         
         }
 
@@ -228,7 +239,10 @@ namespace dotnet_bitcoinparser
             var asFile = System.Text.Encoding.Default.GetBytes(sb.ToString());
             using (var memoryStream = new MemoryStream(asFile))
             {
-                storage.UploadObject("bitcoin-epgm", $"epgm2/{folder}/{fileName}", "application/octet-stream", memoryStream); 
+                storage.UploadObject("bitcoin-hackathon", $"epgm/{folder}/{fileName}", "application/octet-stream", memoryStream,
+                     new UploadObjectOptions{
+                         UploadValidationMode = UploadValidationMode.None
+                         }); 
             }
         }
 
