@@ -43,7 +43,7 @@ object App {
             .map(f =>  f._2.get)
             .flatMap(f => f)
             .map(f => Hex.encodeHexString(f))
-            //.coalesce(50)
+            .repartition(1800)
             .saveAsTextFile(OUTPUT_DIR,classOf[GzipCodec])
 
         blocksAsArray.filter(f => f._2.isFailure)
