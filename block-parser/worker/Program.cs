@@ -64,7 +64,19 @@ namespace dotnet_bitcoinparser
             Console.WriteLine($"Processing file {fileName}");
 
             var blocksAsHex = GetBlocksFromGoogleFile(fileName);
-            Parallel.ForEach(blocksAsHex,(item)=>{
+            // Dictionary<string,List<string>> data = new Dictionary<string, List<string>>(); 
+            // data.Add(Label.BLOCK,new List<string>());
+            // data.Add(Label.ADDRESS,new List<string>());
+            // data.Add(Label.TRANSACTION,new List<string>());
+            // data.Add(Label.TRANSACTION_OUT,new List<string>());
+            // data.Add(Label.SPENT,new List<string>());
+            // data.Add(Label.PRODUCED,new List<string>());
+            // data.Add(Label.PREVIOUS,new List<string>());
+            // data.Add(Label.MINED_IN,new List<string>());
+            // data.Add(Label.LOCKED_AT,new List<string>());
+
+            foreach (var item in blocksAsHex)
+            {
                 try
                 {
                     var block = Block.Parse(item,Network.Main);
@@ -79,14 +91,14 @@ namespace dotnet_bitcoinparser
                     foreach (var elementGroup in elementGroups)
                     {
                         var label = elementGroup.Key;
-                        WriteGoogleFile(label, $"{blockHash}.txt" ,elementGroup.Elements);    
+                        WriteGoogleFile(label, $"{blockHash}.txt" , elementGroup.Elements);  
                     }
                 }
                 catch (System.Exception ex)
                 {
                     Console.WriteLine($"In {fileName} unable to process block : {item} due to {ex.Message}");
-                }
-            });             
+                }               
+            }         
         }
 
         private static IEnumerable<Epm> ToEpgmElements(Block block)
@@ -216,7 +228,7 @@ namespace dotnet_bitcoinparser
             var asFile = System.Text.Encoding.Default.GetBytes(sb.ToString());
             using (var memoryStream = new MemoryStream(asFile))
             {
-                storage.UploadObject("bitcoin-epgm", $"epgm/{folder}/{fileName}", "application/octet-stream", memoryStream); 
+                storage.UploadObject("bitcoin-epgm", $"epgm2/{folder}/{fileName}", "application/octet-stream", memoryStream); 
             }
         }
 

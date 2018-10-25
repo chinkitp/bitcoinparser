@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: bitcoin-parser-worker
 spec:
-  replicas: 6
+  replicas: 37
   template:
     metadata:
       labels:
